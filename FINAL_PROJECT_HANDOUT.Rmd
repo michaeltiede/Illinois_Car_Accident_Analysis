@@ -1,0 +1,353 @@
+---
+title: 'Final Project Handout: Illinois Car Accident Analysis'
+author: "Paul Martinuzzi & Michael Tiede"
+date: "1/29/2020"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+    df_print: paged
+header-includes: null
+editor_options:
+  chunk_output_type: inline
+---
+#Intro:
+
+Overarching Question: 
+
+  + We wanted to get a better understanding of the accidents that have occured in Illinois between 2016 and 2017, as well as, learn how the severity of an accident may be influenced.
+
+##Hypotheses:
+
+1. During the winter accidents will increase.
+
+2. The Chicago area will have a higher proportion of sever accidents, than the outer counties.
+
+3. We suspect that the majority of accidents that happen will occur due to weather conditions involving rain or snow.
+
+4. Due to the Chicago area's high amount of skyscrapers and infrastructure we hypothesize that wind speeds will be lower on average in Chicago area counties in comparison to Outer counties, due to skyscrapers ability to act as wind breaks.
+
+\hrulefill 
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+
+library(socviz)
+library(tidyverse)a
+library(ggplot2)
+library(ggrepel)
+library(dplyr)
+library(stringr)
+
+accident <- read_csv("~/Mscs 150 I20/Project/Paul-Michael_Project_Folder/US_Accidents_Dec19paul.csv")
+```
+
+#Data description:
+
+**Variable Chart:** | Type         | Description |
+--------------------|--------------------------|---------------------------------------------|
+Severity  | Quantitative numeric  | Severity of accident i.e(impact on traffic delay) |
+County   | Categorical Nominal  | County name |
+temp  | Quantitative Continuous  | Temperature during accident |
+Weather_Condition   | Categorical Nominal  | Weather conditions during accident |
+months   | Categorical nominal   | June(2016) through January(2017) |
+seasons   | Categorical nominal   | Summer, Fall, Other |
+Region   | Binary(Chicago Area/Outer Counties)   | Regions of Illinois |
+windspeed   | Quantitative continuous   | windspeed during accident(mph) |
+
+*Note: 6/26/2016 to 1/17/2017 8 months of data.*
+
+Link to dataset description:
+<https://www.kaggle.com/sobhanmoosavi/us-accidents>
+
+\hrulefill 
+
+#Data Manipulation Code
+```{r}
+names(accident)[9] <- "temp" #renaming columns
+names(accident)[10] <- "humidity"
+names(accident)[12] <- "visibility"
+names(accident)[13] <- "windspeed"
+names(accident)[14] <- "precip"
+
+accident2 <- accident  #creating copy of dataset to manipulate
+```
+
+```{r} 
+# Code Credit here goes to Professor Lane-Getaz
+
+dates = str_sub(accident2$Start_Time, 1, 2)#shorten string to just first 2 characters
+```
+
+```{r}
+accident2$months <- factor(dates) #create new columns for month and season
+accident2$seasons <- factor(dates)
+```
+
+```{r}
+#if else to create month labels
+accident2=mutate(accident2, 
+months=ifelse(months=='1/',"Jan", 
+ifelse(months=='6/',"Jun", 
+ifelse(months=='7/',"Jul",
+ifelse(months=='8/',"Aug",
+ifelse(months=='9/',"Sep", 
+ifelse(months=='10',"Oct", 
+ifelse(months=='11',"Nov", 'Dec'))))))))
+```
+
+```{r}
+target <- c("Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Jan", "Dec") 
+
+# create 'target' which holds all the months I want to look at, then filter the dataset 
+#so that it will only contain rows with those values.
+
+accident2 <- filter(accident2, months %in% target)
+```
+
+```{r}
+#if else for season labels
+accident2=mutate(accident2, 
+seasons=ifelse(seasons=='6/',"Summer",
+ifelse(seasons=='7/',"Summer",
+ifelse(seasons=='8/',"Summer",
+ifelse(seasons=='9/',"Fall",
+ifelse(seasons=='10',"Fall",
+ifelse(seasons=='11',"Fall", "Other")))))))
+```
+
+```{r, eval=FALSE}
+#See a list of all the different types of weather conditions present
+unique(accident2$Weather_Condition)
+```
+
+```{r}
+#if else for weather condition labels
+accident2=mutate(accident2, 
+Weather_Condition=ifelse(Weather_Condition=='Partly Cloudy',"Cloudy",
+ifelse(Weather_Condition=='Clear',"Clear",
+ifelse(Weather_Condition=='Scattered Clouds',"Cloudy",
+ifelse(Weather_Condition=='Overcast',"Cloudy", 
+ifelse(Weather_Condition=='Light Snow',"Light Snow",
+ifelse(Weather_Condition=='Light Freezing Fog',"Light Snow",
+ifelse(Weather_Condition=='Snow',"Snow",
+ifelse(Weather_Condition=='Light Freezing Rain',"Light Snow",
+ifelse(Weather_Condition=='Light Freezing Drizzle',"Light Snow",
+ifelse(Weather_Condition=='Light Thunderstorms and Snow',"Light Snow",
+ifelse(Weather_Condition=='Mostly Cloudy',"Cloudy",
+ifelse(Weather_Condition=='Light Rain',"Light Rain",
+ifelse(Weather_Condition=='Heavy Thunderstorms and Rain',"Heavy Rain",
+ifelse(Weather_Condition=='Thunderstorms',"Heavy Rain",
+ifelse(Weather_Condition=='NA',"NA",
+ifelse(Weather_Condition=='Light Drizzle',"Light Rain",
+ifelse(Weather_Condition=='Drizzle',"Light Rain",
+ifelse(Weather_Condition=='Mist',"Light Rain",
+ifelse(Weather_Condition=='Shallow Fog',"Cloudy",
+ifelse(Weather_Condition=='Haze',"Cloudy",
+ifelse(Weather_Condition=='Thunderstorms and Rain',"Rain",
+ifelse(Weather_Condition=='Rain',"Rain",
+ifelse(Weather_Condition=='Light Thunderstorms and Rain',"Light Rain",
+ifelse(Weather_Condition=='Heavy Rain',"Heavy Rain",
+ifelse(Weather_Condition=='Fog',"Cloudy", "Other"))))))))))))))))))))))))))
+```
+
+```{r}
+accident2 <- select(accident2,-c(8, 16:32)) #removing unneeded columns
+accident2 <- accident2 %>% sample_n(2000) #take a random 2000 row sample for accident2 to analyze
+```
+
+```{r, eval=FALSE}
+#See a list of all the different types of counties present
+unique(accident2$County)
+#Note: DuPage and Dupage are both listed due to human error
+```
+
+```{r}
+#if else to create region labels
+accident2=mutate(accident2, 
+Region=ifelse(County=='Cook',"Chicago Area",
+ifelse(County=='Dupage',"Chicago Area",
+ifelse(County=='DuPage',"Chicago Area",
+ifelse(County=='Will',"Chicago Area",
+ifelse(County=='Kane',"Chicago Area",
+ifelse(County=='Lake',"Chicago Area", 'Outer Counties')))))))
+```
+
+\hrulefill
+
+#Map of Illinois by Population Density
+```{r}
+#Create theme for mapping
+theme_map <- function(base_size=9, base_family="") 
+  { require(grid)
+  theme_bw(base_size=base_size, base_family=base_family) %+replace%
+    theme(axis.line=element_blank(),
+          axis.text=element_blank(),
+          axis.ticks=element_blank(), axis.title=element_blank(),
+          panel.background=element_blank(), panel.border=element_blank(),
+          panel.grid=element_blank(), panel.spacing=unit(0, "lines"),
+          plot.background=element_blank(), legend.justification = c(0,0),
+          legend.position = c(0,0)
+    )
+  }
+```
+```{r}
+#Merge datasets
+county_full <- left_join(county_map, county_data, by = "id")
+county_full %>%
+  select(id, name, state, pct_black, long, lat) %>% 
+  sample_n(5)
+```
+```{r fig.height=4, fig.width=6, message=FALSE}
+#Filter to just Illinois
+library(stringr)
+
+ilpopden<- subset(county_full, state %in% c("IL"))
+
+p<-ggplot(data = ilpopden, aes(x = long, y = lat, fill = pop_dens, group = group))
+
+p1 <- p + geom_polygon(color = "gray90", size = 0.05) + 
+  coord_equal()
+p2 <- p1 + scale_fill_brewer(palette="Blues",
+                    labels=c("0-10","10-50","50-100","100-500","500-1,000",
+                             "1,000-5,000", ">5,000"))
+
+p2 + labs(fill = "Population per\nsquare mile") + theme_map() +
+  guides(fill = guide_legend(nrow = 1)) + 
+  theme(legend.position = "bottom")+
+  #Outline the State Black
+  geom_polygon(color = "black", fill = NA)+ggtitle("Population Density by County in Illinois")
+```
+
+\hrulefill
+
+\newpage
+
+##**Hypothesis 1:** Winter will have more accidents reported than Fall and Summer and Fall wil have more accidents reported than Summer.
+
+```{r, message=FALSE}
+#Line plot showing accident # by month and season
+
+p<-ggplot(data=accident2, aes(x=months, color=Region), stat='count') + geom_point(aes(group = Region), stat='count') + geom_line(aes(group = Region), stat='count') + xlab("Month") + ylab("Number of Accidents (log(10))") + ggtitle("Number of Accidents by Region in IL between Jun-Nov(2016)") + scale_x_discrete(limits = month.abb) + theme(plot.title = element_text(hjust = 0.5)) + 
+  annotate(geom="rect", xmin="Jun", xmax="Aug", ymin=0, ymax=1700, fill="yellow", alpha=.2) +
+  annotate(geom="text", x="Jun", y=1250, label="Summer", hjust=0) + 
+  annotate(geom="rect", xmin="Sep", xmax="Nov", ymin=0, ymax=1700, fill="green", alpha=.17) +
+  annotate(geom="text", x="Sep", y=1250, label="Fall", hjust=0) + ylim(0,1700) + labs(caption = "*June only includes 11 days of data") + scale_y_log10()+ scale_fill_brewer(palette="Set1")
+p
+```
+*Note: June is shorter due to data starting on June 21st and Jan. data ends on Jan. 17th*
+
+```{r}
+addmargins(table(accident2$months,accident2$seasons))
+```
+
+>
+
+
+```{r fig.height=5, fig.width=7, message=FALSE}
+#Histogram temperature by month
+
+temp.df = accident2 %>% 
+  group_by(months) %>% 
+  summarize_if(is.numeric, list(mean=mean), na.rm = TRUE) %>% 
+  ungroup()
+
+p3 <- ggplot() + geom_histogram(data=accident2, aes(x=temp, fill=seasons)) + facet_wrap(~months) + geom_vline(data=temp.df, aes(xintercept=temp_mean), colour="#000000", linetype="dashed")  + labs(caption="Mean Temp('F) by Month:Aug=78.2,Dec=22.9,Jan=30.4,Jul=79.0,Jun=74.9,Nov=50.4,Oct=58.6,Sep=71.4") + xlab("Temperature('F)") + ylab("Number of Accidents") + ggtitle("Number of Accidents by Temperature('F) & Month, colored by season (IL)") + theme(plot.title = element_text(hjust = 0.5))+ scale_fill_brewer(palette="Set1")
+p3
+```
+
+\hrulefill
+
+\newpage
+
+##**Hypothesis 2:** The Chicago area will have a higher proportion of sever accidents than the outer counties.
+
+```{r fig.height=4, fig.width=8}
+ggplot(data=accident2, aes(x=Region, fill=as.factor(Severity)))+geom_bar(stat='count') + guides(fill=guide_legend(title="Severity Level")) + ggtitle("Number of Accidents in IL by Severity Level & Region") + ylab("Count") + theme(plot.title = element_text(hjust = 0.5)) + scale_fill_brewer(palette="Set1")
+```
+
+```{r fig.height=5, fig.width=8}
+ggplot(data=accident2, aes(x=County, fill=as.factor(Severity)))+geom_bar(stat='count') + guides(fill=guide_legend(title="Severity Level")) + ggtitle("Number of Accidents in IL by Severity Level & County ('Chicago Area' Counties Bolded)") + ylab("Count") + theme(plot.title = element_text(hjust = 0.5)) + theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    scale_x_discrete(labels=c("Cook"=expression(bold(Cook)), "Dupage"=expression(bold(Dupage)), "DuPage"=expression(bold(DuPage)), "Will"=expression(bold(Will)), "Kane"=expression(bold(Kane)),
+                              "Lake"=expression(bold(Lake)), parse=TRUE))+ scale_fill_brewer(palette="Set1")
+```
+
+Severity: Shows the severity of the accident (1-4), 1 indicates the least impact on traffic (i.e., short delay as a result of the accident) and 4 indicates a significant impact on traffic (i.e., long delay).
+
+```{r}
+table(accident2$Severity, accident2$Region)
+```
+
+\hrulefill
+
+##**Hypothesis 3:** We suspect that the majority of accidents that happen will occur due to weather conditions involving rain or snow.
+
+```{r fig.height=4.5, fig.width=7}
+#Stacked Barplot showing accident # by weather condition and month/season
+
+#By Proportion
+p = ggplot(data=accident2, aes(x=months, fill=Weather_Condition))
+p + geom_bar(aes(y = (..count..)/sum(..count..))) + 
+  theme(legend.position="right") + ylab("Proportion of Total Accidents") + scale_x_discrete(limits = month.abb) + ylab("Proportion of Total Accidents") + xlab("Month") + theme(plot.title = element_text(hjust = 0.5)) + ggtitle("Proportion of Accidents in IL by Weather Condition & Month(2016)") + scale_fill_brewer(palette="Set1")
+```
+
+Low number of rain accidents may be influenced due to the disproportional days of rain and no rain for 2016 summer and fall 489 out of 7788 accidents had rain. 
+
+\hrulefill
+
+##**Hypothesis 4:** Due to the Chicago area's high amount of skyscrapers and infrastructure we hypothesize that wind speeds will be lower on average in Chicago area counties in comparison to Outer counties, due to skyscrapers ability to act as wind breaks.
+
+<https://en.wikipedia.org/wiki/Urban_climate>
+
+```{r fig.height=6, fig.width=6}
+#Cleveland Dot Plot
+temp.df = accident2 %>% 
+  group_by(Region, County) %>% 
+  summarize_if(is.numeric, list(mean=mean, sd=sd), na.rm = TRUE) %>% 
+  ungroup()
+p = ggplot(temp.df, aes(x=reorder(County, windspeed_mean), y=windspeed_mean, color=Region))
+p + geom_point()+coord_flip()+labs(title="Cleveland Plot of Windspeed (mean) \nof each County", caption="Data source=accident2 dataset", y='Windspeed_mean(mph))', x='County') +
+    scale_x_discrete(labels=c("Cook"=expression(bold(Cook)), "Dupage"=expression(bold(Dupage)), "DuPage"=expression(bold(DuPage)), "Will"=expression(bold(Will)), "Kane"=expression(bold(Kane)),
+                              "Lake"=expression(bold(Lake)), parse=TRUE))+ scale_fill_brewer(palette="Set1")
+```
+
+##Something new^^^
+\newpage
+
+**Why this matters:**
+
+According to the Federal Highway Administration, wind speed can have an impact on road safety in a number of different ways. For example, strong winds can affect the performance of cars and trucks, interfering with stability. Moreover, windy conditions can result in decreased visibility due to dust being whipped up or snow being blown around. Debris may be scattered on a road due to wind or strong gusts may cause tree limbs to fall onto the road. Moreover, wind can cause snow to pile up in certain spots.
+
+**Source:** <https://www.hmnlaw.com/blog/2017/07/can-strong-winds-cause-a-car-crash.shtml>
+
+\hrulefill
+
+#Discussion:
+
+##Relevance/Who cares?
+
+Opporating companies such as AAA and car insurance corporations, as well as, normal drivers should care about this information. It can advice normal drivers about which areas in IL have higher odds of having a high severity accident. AAA could hire more on call AAA drivers for months when accidents are higher than others. Car insurance companies could build reward programs to reward drivers for being accident free under certain conditions/months.
+
+##What	would	we	do	differently?
+
+We would create another variable that is time of day the accident occured, so that we can see how accident counts change as the day progresses (i.e. rush hour). 
+
+##Limitations/Future Research:
+
+We did not have any information about the county populations in IL at the time, which would have assited us in finding which counties have higher counts of accidents per 1,000 for example. This extra layer of analysis could have lead us to more conclusive findings. This is why if we continue further research we would be sure to add this data into our existing dataset.
+
+##New Hypothesis:
+
+If we were to continue our research with with population by county added we hypothesize that the Chicago area counties would have higher rates of accidents in comparison to the outer counties. We hypothesize this because the high density of cars, plus the rapid stop and go movement in the area we think would lead to more human error and in turn accidents.
+
+##Problems we Faced:
+
+We had to deal with a lot of data manipulation, i.e. creating our own variables from the data column in our dataset. This proved to be quite difficult. Also, one row was present that had a temperature of over 132 'F. A temperature never expereinced in recorded history in Illinois. So we had to remove that. Also, it proved difficult to work with months and seasons that were not ordered, but certain code functions helped us deal with this.
+
+\hrulefill
+
+#Conclusion/Summary:
+
+Month does not influence the amount of accidents that much from what we can tell in our dataset, however, cook county(Chicago) has a higher proportion of lvl 3 severity accidents than other counties. Most accidents in IL occur in the Chicago area. As winter approaches more accidents are due to snow.
+
+<https://rpubs.com/mtd2020/569550>
